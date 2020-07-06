@@ -1,4 +1,4 @@
-db-instance-type = ""
+db-instance-type = "t3.small"
 vpc_name = "Terraform-EKS"
 vpc_cidr = "10.0.0.0/16"
 
@@ -12,6 +12,6 @@ app-scaling-desired-capacity = 2
 app-scaling-min-size = 1
 app-scaling-max-size = 2
 
-#db-scaling-desired-capacity = 0
-#db-scaling-min-size = 0
-#db-scaling-max-size = 0
+db-scaling-desired-capacity = 1
+db-scaling-min-size = 1
+db-scaling-max-size = 2

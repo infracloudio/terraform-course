@@ -9,18 +9,22 @@ data "aws_ami" "eks-worker" {
 }
 
 locals {
-  demo-node-userdata = <<USERDATA
+  app-node-userdata = <<USERDATA
 #!/bin/bash
 set -o xtrace
-/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.demo.endpoint}' --b64-cluster-ca '${aws_eks_cluster.demo.certificate_authority[0].data}' '${var.cluster-name}'
-curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
-chmod +x ./kubectl
-sudo mv ./kubectl /usr/local/bin/kubectl
-kubectl --kubeconfig=/var/lib/kubelet/kubeconfig label nodes $(hostname) app=sample
+/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.demo.endpoint}' --b64-cluster-ca '${aws_eks_cluster.demo.certificate_authority[0].data}' '${var.cluster-name}' --kubelet-extra-args '--node-labels=app=test'
 USERDATA
 
 }
 
+locals {
+  db-node-userdata = <<USERDATA
+#!/bin/bash
+set -o xtrace
+/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.demo.endpoint}' --b64-cluster-ca '${aws_eks_cluster.demo.certificate_authority[0].data}' '${var.cluster-name}' --kubelet-extra-args '--node-labels=app=db'
+USERDATA
+
+}
 resource "aws_launch_configuration" "app_launch_config" {
   associate_public_ip_address = true
   iam_instance_profile = aws_iam_instance_profile.demo-node.name
@@ -29,19 +33,16 @@ resource "aws_launch_configuration" "app_launch_config" {
   key_name = "kunal_eks"
   name_prefix = "eks-launch-config"
   security_groups = [aws_security_group.demo-node.id]
-  user_data_base64 = base64encode(local.demo-node-userdata)
-	
- # provisioner "local-exec"{
- # command=<<EOT
-#      terraform output kubeconfig > config;
- #     terraform output config-map-aws-auth > config-map-aws-auth.yaml
-	
-#	EOT
-#}
-  lifecycle {
+  user_data_base64 = base64encode(local.app-node-userdata)
+
+
+lifecycle {
     create_before_destroy = true
-  }
+
+
 }
+}
+
 
 resource "aws_autoscaling_group" "app_asg" {
   desired_capacity = var.app-scaling-desired-capacity
@@ -50,12 +51,16 @@ resource "aws_autoscaling_group" "app_asg" {
   min_size = var.app-scaling-min-size
   name = "eks-autoscaling-group"
   vpc_zone_identifier = module.vpc.private_subnets
-  
+
   provisioner "local-exec"{
+
   command = <<EOT
-	terraform output kubeconfig > config;
-	EOT
+  terraform output kubeconfig > ~/.kube/config
+  terraform output config-map-aws-auth > config-map-aws-auth.yml
+  kubectl apply -f config-map-aws-auth.yml
+EOT
 }
+
   tag {
     key = "Name"
     value = "terraform-eks-autoscaling-group"
@@ -74,23 +79,35 @@ resource "aws_launch_configuration" "db_launch_config" {
   iam_instance_profile = aws_iam_instance_profile.demo-node.name
   image_id = data.aws_ami.eks-worker.id
   instance_type = var.db-instance-type
-  name_prefix = "eks-launch-config"
+  name_prefix = "eks-db-launch-config"
   security_groups = [aws_security_group.demo-node.id]
-  user_data_base64 = base64encode(local.demo-node-userdata)
+  user_data_base64 = base64encode(local.db-node-userdata)
+
+
+
 
   lifecycle {
     create_before_destroy = true
   }
 }
 
+
+
 resource "aws_autoscaling_group" "db_asg" {
   desired_capacity = var.db-scaling-desired-capacity
   launch_configuration = aws_launch_configuration.db_launch_config.id
   max_size = var.db-scaling-max-size
   min_size = var.db-scaling-min-size
-  name = "eks-autoscaling-group"
+  name = "eks-db-autoscaling-group"
   vpc_zone_identifier = module.vpc.private_subnets
 
+  provisioner "local-exec"{
+
+  command = <<EOT
+  terraform output kubeconfig > ~/.kube/config
+  terraform output config-map-aws-auth > config-map-aws-auth.yml
+  EOT
+} 
   tag {
     key = "Name"
     value = "terraform-eks-autoscaling-group"
