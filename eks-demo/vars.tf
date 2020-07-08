@@ -57,6 +57,9 @@ variable "db-scaling-max-size"{
 type = number
 }
 
+variable "key_name"{
+type = string
+}
 
 variable "bucket-name"{
 type = string

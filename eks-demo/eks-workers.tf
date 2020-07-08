@@ -30,7 +30,7 @@ resource "aws_launch_configuration" "app_launch_config" {
   iam_instance_profile = aws_iam_instance_profile.demo-node.name
   image_id = data.aws_ami.eks-worker.id
   instance_type = var.app-instance-type
-  key_name = "kunal_eks"
+  key_name = var.key_name
   name_prefix = "eks-launch-config"
   security_groups = [aws_security_group.demo-node.id]
   user_data_base64 = base64encode(local.app-node-userdata)
@@ -81,6 +81,7 @@ resource "aws_launch_configuration" "db_launch_config" {
   instance_type = var.db-instance-type
   name_prefix = "eks-db-launch-config"
   security_groups = [aws_security_group.demo-node.id]
+  key_name = var.key_name
   user_data_base64 = base64encode(local.db-node-userdata)
 
 
